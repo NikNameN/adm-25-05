@@ -9,9 +9,111 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="АДМ-25-05">
 <title>АДМ-25-05</title>
+<style>
+:root{--bg:#070b14;--card:#141c2c;--card2:#1a2438;--line:rgba(255,255,255,.08);--text:#f2f5fa;--muted:#8b97ab}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif}
+body{padding-top:calc(env(safe-area-inset-top) + 8px);padding-bottom:calc(env(safe-area-inset-bottom) + 20px)}
+header{padding:8px 16px 10px;position:sticky;top:0;z-index:20;background:rgba(7,11,20,.94);backdrop-filter:blur(16px)}
+.brand{display:flex;align-items:center;justify-content:space-between}
+h1{margin:0;font-size:20px}
+.hint{color:var(--muted);font-size:12px;margin-top:3px}
+.today-btn{border:0;background:var(--card2);color:#7eb0ff;font-size:13px;font-weight:600;padding:7px 11px;border-radius:999px}
+.next{margin:8px 16px 0;padding:12px 14px;border-radius:16px;background:linear-gradient(135deg,#1b3a7a,#163056)}
+.next .lbl{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#9dc0ff}
+.next .what{font-size:16px;font-weight:700;margin-top:3px}
+.next .when{font-size:13px;color:#c9d8f5;margin-top:2px}
+.weeks{display:flex;gap:8px;overflow-x:auto;padding:12px 16px 4px;scrollbar-width:none}
+.weeks button{flex:0 0 auto;border:1px solid var(--line);background:var(--card);color:var(--text);border-radius:14px;padding:8px 11px;font-size:12px;text-align:left}
+.weeks button .wnum{display:block;color:var(--muted);font-size:10px}
+.weeks button.on{background:#2563eb;border-color:#2563eb}
+.seg{margin:10px 16px 6px;display:flex;background:var(--card);border-radius:12px;padding:3px}
+.seg button{flex:1;border:0;background:transparent;color:var(--muted);font-size:13px;font-weight:600;padding:8px;border-radius:10px}
+.seg button.on{background:var(--card2);color:var(--text)}
+.day{padding:6px 16px 2px}
+.day h2{margin:14px 0 8px;font-size:13px;color:var(--muted)}
+.day.today h2{color:#dbeafe}
+.item{background:var(--card);border-radius:16px;padding:12px 13px;margin-bottom:8px;display:flex;gap:12px;border:1px solid var(--line)}
+.stripe{width:4px;border-radius:99px;flex:0 0 4px}
+.time{width:64px;flex:0 0 64px;font-variant-numeric:tabular-nums}
+.time b{display:block;font-size:14px}
+.time span{color:var(--muted);font-size:12px}
+.title{font-size:15px;font-weight:650}
+.meta{margin-top:3px;font-size:12px;color:var(--muted)}
+.badge{display:inline-block;font-size:11px;font-weight:600;padding:2px 7px;border-radius:999px;margin-right:4px;background:#1e293b;color:#cbd5e1}
+.lec{background:#1e3a5f;color:#93c5fd}
+.sem{background:#14532d;color:#86efac}
+.lab{background:#5b21b6;color:#ddd6fe}
+.empty,.tip{text-align:center;color:var(--muted);padding:24px 16px}
+.tip{margin:8px 16px;border-radius:14px;background:var(--card);text-align:left}
+footer{padding:18px 16px;color:#667085;font-size:11px;text-align:center}
+</style>
 </head>
 <body>
-<p>Расписание АДМ-25-05 загружается…</p>
-<script src="app.js"></script>
+<header>
+  <div class="brand">
+    <div><h1>АДМ-25-05</h1><div class="hint" id="headerHint">загрузка…</div></div>
+    <button class="today-btn" id="jumpToday">Сегодня</button>
+  </div>
+</header>
+<div class="tip" id="installTip" hidden><b style="color:#fff">На домашний экран:</b> Поделиться → На экран «Домой».</div>
+<div class="next" id="nextBox" hidden></div>
+<div class="weeks" id="weeks"></div>
+<div class="seg" id="seg">
+  <button data-g="all" class="on">Все</button>
+  <button data-g="А">Подгруппа А</button>
+  <button data-g="Б">Подгруппа Б</button>
+</div>
+<main id="board"><div class="empty">Загружаю расписание…</div></main>
+<footer>Лабы А и Б иногда в одном слоте — выбери свою подгруппу.</footer>
+<script>
+const SHORT=["Аналитика данных","Сенсоры роботов","Управление проектом","ПО мехатронных систем","Инструменты моделирования","Навигация АМР","Стоимостной инжиниринг"];
+const COLORS=["#3b82f6","#8b5cf6","#10b981","#ef4444","#f59e0b","#06b6d4","#94a3b8"];
+const TNAMES=["Лекция","Семинар","Лабораторная"];
+const DAYS=["Понедельник","Вторник","Среда","Четверг","Пятница","Суббота"];
+let group=localStorage.getItem("adm2505_group")||"all";
+function isoToday(){const n=new Date();return new Date(n-n.getTimezoneOffset()*60000).toISOString().slice(0,10)}
+function parseLocal(iso){return new Date(iso+"T12:00:00")}
+function fmtDay(iso){return parseLocal(iso).toLocaleDateString("ru-RU",{day:"numeric",month:"long"})}
+function fmtShort(iso){return parseLocal(iso).toLocaleDateString("ru-RU",{day:"numeric",month:"short"})}
+function weekEnd(ws){const d=parseLocal(ws);d.setDate(d.getDate()+5);return new Date(d-d.getTimezoneOffset()*60000).toISOString().slice(0,10)}
+function weekTitle(ws){return fmtShort(ws)+" – "+fmtShort(weekEnd(ws))}
+fetch("./events.json").then(r=>r.json()).then(PACK=>{
+const EVENTS=PACK.e.map(r=>({date:r[0],start:r[1],end:r[2],si:r[3],type:TNAMES[r[4]],teacher:r[5],group:r[6],week_start:r[7],day:r[8]}));
+const WEEKS=[...new Set(EVENTS.map(e=>e.week_start))].sort();
+const today=isoToday();
+let current=WEEKS.find(w=>today>=w&&today<=weekEnd(w))||WEEKS.find(w=>w>=today)||WEEKS.at(-1);
+const nav=document.getElementById("weeks");
+WEEKS.forEach((w,i)=>{const b=document.createElement("button");b.innerHTML=`<span class="wnum">неделя ${i+1}</span>${weekTitle(w)}`;b.dataset.w=w;b.onclick=()=>{current=w;render()};nav.appendChild(b)});
+document.getElementById("seg").onclick=e=>{const btn=e.target.closest("button");if(!btn)return;group=btn.dataset.g;localStorage.setItem("adm2505_group",group);render()};
+document.getElementById("jumpToday").onclick=()=>{current=WEEKS.find(w=>today>=w&&today<=weekEnd(w))||current;render();const el=document.querySelector(".day.today");if(el)el.scrollIntoView({behavior:"smooth"})};
+function filtered(list){return list.filter(e=>!e.group||group==="all"||e.group===group)}
+function badgeType(t){return t==="Лекция"?"lec":t==="Семинар"?"sem":"lab"}
+function nextClass(){const now=new Date();return filtered(EVENTS).map(e=>({...e,startAt:new Date(e.date+"T"+e.start+":00")})).filter(e=>e.startAt>=new Date(now-2*3600000)).sort((a,b)=>a.startAt-b.startAt)[0]}
+function render(){
+  [...nav.children].forEach(b=>b.classList.toggle("on",b.dataset.w===current));
+  const onBtn=nav.querySelector(".on");if(onBtn)onBtn.scrollIntoView({inline:"center",block:"nearest"});
+  [...document.querySelectorAll("#seg button")].forEach(b=>b.classList.toggle("on",b.dataset.g===group));
+  const ev=filtered(EVENTS.filter(e=>e.week_start===current)).sort((a,b)=>(a.date+a.start).localeCompare(b.date+b.start));
+  document.getElementById("headerHint").textContent=weekTitle(current);
+  const board=document.getElementById("board");
+  if(!ev.length){board.innerHTML='<div class="empty">На этой неделе пар нет</div>';drawNext();return}
+  let html="";
+  for(const day of DAYS){
+    const list=ev.filter(e=>e.day===day);if(!list.length)continue;
+    html+=`<section class="day${list[0].date===today?" today":""}"><h2>${day}, ${fmtDay(list[0].date)}</h2>`;
+    for(const e of list){
+      html+=`<article class="item"><div class="stripe" style="background:${COLORS[e.si]}"></div><div class="time"><b>${e.start}</b><span>${e.end}</span></div><div><div class="title">${SHORT[e.si]}</div><div class="meta"><span class="badge ${badgeType(e.type)}">${e.type}</span>${e.group?`<span class="badge">гр. ${e.group}</span>`:""}${e.teacher||""}</div></div></article>`;
+    }
+    html+="</section>";
+  }
+  board.innerHTML=html;drawNext();
+}
+function drawNext(){const box=document.getElementById("nextBox");const n=nextClass();if(!n){box.hidden=true;return}box.hidden=false;const when=n.date===today?`сегодня ${n.start}`:`${fmtShort(n.date)}, ${n.start}`;box.innerHTML=`<div class="lbl">ближайшая пара</div><div class="what">${SHORT[n.si]}</div><div class="when">${when}–${n.end} · ${n.type}${n.group?" · гр. "+n.group:""}</div>`}
+const standalone=navigator.standalone===true||matchMedia("(display-mode: standalone)").matches;
+if(!standalone&&/iPhone|iPad|iPod/.test(navigator.userAgent)&&/Safari/.test(navigator.userAgent)&&!/CriOS|FxiOS/.test(navigator.userAgent)) document.getElementById("installTip").hidden=false;
+render();
+}).catch(()=>{document.getElementById("board").innerHTML='<div class="empty">Не удалось загрузить events.json</div>'});
+</script>
 </body>
 </html>
